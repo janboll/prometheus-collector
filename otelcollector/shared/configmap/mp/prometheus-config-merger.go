@@ -1464,6 +1464,58 @@ func deepMerge(target, source map[interface{}]interface{}) map[interface{}]inter
 	return target
 }
 
+func appendGlobalRelabelConfigs(mergedConfigs map[interface{}]interface{}) {
+	if mergedConfigs == nil {
+		return
+	}
+
+	content, err := os.ReadFile(defaultRelabelConfigsMountPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("Error reading %s: %v\n", defaultRelabelConfigsMountPath, err)
+		}
+		return
+	}
+
+	var globalRelabelConfigs []interface{}
+	if err := yaml.Unmarshal(content, &globalRelabelConfigs); err != nil {
+		log.Printf("Error unmarshalling %s: %v\n", defaultRelabelConfigsMountPath, err)
+		return
+	}
+
+	if len(globalRelabelConfigs) == 0 {
+		return
+	}
+
+	scrapeConfigsRaw, ok := mergedConfigs["scrape_configs"]
+	if !ok {
+		return
+	}
+
+	scrapeConfigs, ok := scrapeConfigsRaw.([]interface{})
+	if !ok {
+		return
+	}
+
+	for i, scfgRaw := range scrapeConfigs {
+		scfgMap, ok := scfgRaw.(map[interface{}]interface{})
+		if !ok {
+			continue
+		}
+
+		relabelCfgsRaw, exists := scfgMap["relabel_configs"]
+		if !exists {
+			scfgMap["relabel_configs"] = globalRelabelConfigs
+		} else if relabelCfgsSlice, ok := relabelCfgsRaw.([]interface{}); ok {
+			scfgMap["relabel_configs"] = append(relabelCfgsSlice, globalRelabelConfigs...)
+		}
+		scrapeConfigs[i] = scfgMap
+	}
+
+	mergedConfigs["scrape_configs"] = scrapeConfigs
+	log.Printf("Successfully appended global relabel_configs to default scrape configs\n")
+}
+
 func writeDefaultScrapeTargetsFile(operatorEnabled bool) map[interface{}]interface{} {
 	noDefaultScrapingEnabled := os.Getenv("AZMON_PROMETHEUS_NO_DEFAULT_SCRAPING_ENABLED")
 	if noDefaultScrapingEnabled != "" && strings.ToLower(noDefaultScrapingEnabled) == "false" {
@@ -1475,6 +1527,7 @@ func writeDefaultScrapeTargetsFile(operatorEnabled bool) map[interface{}]interfa
 			populateDefaultPrometheusConfig()
 		}
 		if mergedDefaultConfigs != nil && len(mergedDefaultConfigs) > 0 {
+			appendGlobalRelabelConfigs(mergedDefaultConfigs)
 			log.Printf("Starting to merge default prometheus config values in collector template as backup\n")
 			mergedDefaultConfigYaml, err := yaml.Marshal(mergedDefaultConfigs)
 			if err != nil {

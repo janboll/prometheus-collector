@@ -26,7 +26,11 @@ data:
       local-csi-driver = true
     pod-annotation-based-scraping: |-
       podannotationnamespaceregex = ".*"
-    default-targets-metrics-keep-list: |-
+    default-targets-relabel-configs: |-
+    # - action: replace
+    #   source_labels: [__meta_kubernetes_pod_label_team]
+    #   target_label: team
+  default-targets-metrics-keep-list: |-
       kubelet = ""
       coredns = ""
       cadvisor = ""
@@ -73,7 +77,11 @@ data:
       kube-scheduler = true
       kube-controller-manager = true
       etcd = true
-    default-targets-metrics-keep-list: |-
+    default-targets-relabel-configs: |-
+    # - action: replace
+    #   source_labels: [__meta_kubernetes_pod_label_team]
+    #   target_label: team
+  default-targets-metrics-keep-list: |-
       apiserver = ""
       cluster-autoscaler = ""
       node-auto-provisioning = ""
